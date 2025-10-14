@@ -6,41 +6,30 @@ import time
 import glob
 from sklearn.model_selection import train_test_split
 from google.cloud import storage
-import vertexai
-from vertexai.generative_models import GenerativeModel, Part, SafetySetting, FinishReason
-import vertexai.generative_models as generative_models
+
+# Gen AI
+from google import genai
+from google.genai import types
+from google.genai.types import Content, Part, GenerationConfig, ToolConfig
+from google.genai import errors
 
 # Setup
 GCP_PROJECT = os.environ["GCP_PROJECT"]
 GCP_LOCATION = "us-central1"
-GENERATIVE_MODEL = "gemini-1.5-flash-001"
+GENERATIVE_MODEL = "gemini-2.0-flash-001"
 OUTPUT_FOLDER = "data"
 GCS_BUCKET_NAME = os.environ["GCS_BUCKET_NAME"]
-# Configuration settings for the content generation
-generation_config = {
-    "max_output_tokens": 8192,  # Maximum number of tokens for output
-    "temperature": 1,  # Control randomness in output
-    "top_p": 0.95,  # Use nucleus sampling
-}
 
-# Safety settings to filter out harmful content
+#############################################################################
+#                       Initialize the LLM Client                           #
+llm_client = genai.Client(vertexai=True, project=GCP_PROJECT, location=GCP_LOCATION)
+#############################################################################
+
 safety_settings = [
-    SafetySetting(
-        category=SafetySetting.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-        threshold=SafetySetting.HarmBlockThreshold.BLOCK_ONLY_HIGH
-    ),
-    SafetySetting(
-        category=SafetySetting.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        threshold=SafetySetting.HarmBlockThreshold.BLOCK_ONLY_HIGH
-    ),
-    SafetySetting(
-        category=SafetySetting.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-        threshold=SafetySetting.HarmBlockThreshold.BLOCK_ONLY_HIGH
-    ),
-    SafetySetting(
-        category=SafetySetting.HarmCategory.HARM_CATEGORY_HARASSMENT,
-        threshold=SafetySetting.HarmBlockThreshold.BLOCK_ONLY_HIGH
-    )
+    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
+    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
+    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
+    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
 ]
 
 # System Prompt
@@ -153,6 +142,22 @@ Sample JSON Output:
 
 Note: The sample JSON provided includes only two Q&A pairs for brevity. The actual output should contain all 20 pairs as requested."""
 
+response_schema = {
+    "type": "array",
+    "description": "Array of question and answer pairs",
+    "items": {
+        "type": "object",
+        "properties": {
+            "question": {"type": "string", "description": "The question being asked"},
+            "answer": {
+                "type": "string",
+                "description": "The detailed answer to the question",
+            },
+        },
+        "required": ["question", "answer"],
+    },
+}
+
 
 def generate():
     print("generate()")
@@ -160,37 +165,39 @@ def generate():
     # Make dataset folders
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-    # Initialize Vertex AI project and location
-    vertexai.init(project=GCP_PROJECT, location=GCP_LOCATION)
-    
-    # Initialize the GenerativeModel with specific system instructions
-    model = GenerativeModel(
-        GENERATIVE_MODEL,
-        system_instruction=[SYSTEM_INSTRUCTION]
-    )
-
     INPUT_PROMPT = """Generate 20 diverse, informative, and engaging question-answer pairs about cheese following these guidelines. Ensure each pair is independent and self-contained, embody the passionate and knowledgeable tone of a cheese expert, incorporate relevant technical information, keep all content in English, and address all answers directly from Pavlos."""
-    NUM_ITERATIONS = 5 # INCREASE TO CREATE A LARGE DATASET
+    NUM_ITERATIONS = 5  # INCREASE TO CREATE A LARGE DATASET
+
+    # Configuration settings for the content generation
+    GENERATION_CONFIG = types.GenerateContentConfig(
+        temperature=0.9,
+        top_p=0.95,
+        max_output_tokens=8192,
+        safety_settings=safety_settings,
+        system_instruction=SYSTEM_INSTRUCTION,
+        response_mime_type="application/json",
+        response_schema=response_schema,
+    )
 
     # Loop to generate and save the content
     for i in range(0, NUM_ITERATIONS):
         print(f"Generating batch: {i}")
         try:
-          responses = model.generate_content(
-            [INPUT_PROMPT],  # Input prompt
-            generation_config=generation_config,  # Configuration settings
-            safety_settings=safety_settings,  # Safety settings
-            stream=False,  # Enable streaming for responses
-          )
-          generated_text = responses.text
 
-          # Create a unique filename for each iteration
-          file_name = f"{OUTPUT_FOLDER}/cheese_qa_{i}.txt"
-          # Save
-          with open(file_name, "w") as file:
-            file.write(generated_text)
+            response = llm_client.models.generate_content(
+                model=GENERATIVE_MODEL,
+                contents=INPUT_PROMPT,
+                config=GENERATION_CONFIG,
+            )
+            generated_text = response.text
+
+            # Create a unique filename for each iteration
+            file_name = f"{OUTPUT_FOLDER}/cheese_qa_{i}.txt"
+            # Save
+            with open(file_name, "w") as file:
+                file.write(generated_text)
         except Exception as e:
-          print(f"Error occurred while generating content: {e}")
+            print(f"Error occurred while generating content: {e}")
 
 
 def prepare():
@@ -207,22 +214,22 @@ def prepare():
         print("Processing file:", output_file)
         with open(output_file, "r") as read_file:
             text_response = read_file.read()
-        
-        text_response = text_response.replace("```json","").replace("```","")
+
+        text_response = text_response.replace("```json", "").replace("```", "")
 
         try:
             json_responses = json.loads(text_response)
             output_pairs.extend(json_responses)
-        
+
         except Exception as e:
             errors.append({"file": output_file, "error": str(e)})
-    
+
     print("Number of errors:", len(errors))
     print(errors[:5])
 
     # Save the dataset
     output_pairs_df = pd.DataFrame(output_pairs)
-    output_pairs_df.drop_duplicates(subset=['question'], inplace=True)
+    output_pairs_df.drop_duplicates(subset=["question"], inplace=True)
     output_pairs_df = output_pairs_df.dropna()
     print("Shape:", output_pairs_df.shape)
     print(output_pairs_df.head())
@@ -230,26 +237,39 @@ def prepare():
     output_pairs_df.to_csv(filename, index=False)
 
     # Build training formats
-    output_pairs_df['text'] = "human: " + output_pairs_df['question'] + "\n" + "bot: " + output_pairs_df['answer']
-    
+    output_pairs_df["text"] = (
+        "human: "
+        + output_pairs_df["question"]
+        + "\n"
+        + "bot: "
+        + output_pairs_df["answer"]
+    )
+
     # Gemini Data prep: https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini-supervised-tuning-prepare
     # {"contents":[{"role":"user","parts":[{"text":"..."}]},{"role":"model","parts":[{"text":"..."}]}]}
-    output_pairs_df["contents"] = output_pairs_df.apply(lambda row: [{"role":"user","parts":[{"text": row["question"]}]},{"role":"model","parts":[{"text": row["answer"]}]}], axis=1)
-
+    output_pairs_df["contents"] = output_pairs_df.apply(
+        lambda row: [
+            {"role": "user", "parts": [{"text": row["question"]}]},
+            {"role": "model", "parts": [{"text": row["answer"]}]},
+        ],
+        axis=1,
+    )
 
     # Test train split
-    df_train, df_test = train_test_split(output_pairs_df, test_size=0.1, random_state=42)
-    df_train[["text"]].to_csv(os.path.join(OUTPUT_FOLDER, "train.csv"), index = False)
-    df_test[["text"]].to_csv(os.path.join(OUTPUT_FOLDER, "test.csv"), index = False)
+    df_train, df_test = train_test_split(
+        output_pairs_df, test_size=0.1, random_state=42
+    )
+    df_train[["text"]].to_csv(os.path.join(OUTPUT_FOLDER, "train.csv"), index=False)
+    df_test[["text"]].to_csv(os.path.join(OUTPUT_FOLDER, "test.csv"), index=False)
 
     # Gemini : Max numbers of examples in validation dataset: 256
     df_test = df_test[:256]
 
     # JSONL
     with open(os.path.join(OUTPUT_FOLDER, "train.jsonl"), "w") as json_file:
-        json_file.write(df_train[["contents"]].to_json(orient='records', lines=True))
+        json_file.write(df_train[["contents"]].to_json(orient="records", lines=True))
     with open(os.path.join(OUTPUT_FOLDER, "test.jsonl"), "w") as json_file:
-        json_file.write(df_test[["contents"]].to_json(orient='records', lines=True))
+        json_file.write(df_test[["contents"]].to_json(orient="records", lines=True))
 
 
 def upload():
@@ -259,9 +279,11 @@ def upload():
     bucket = storage_client.bucket(GCS_BUCKET_NAME)
     timeout = 300
 
-    data_files = glob.glob(os.path.join(OUTPUT_FOLDER, "*.jsonl")) + glob.glob(os.path.join(OUTPUT_FOLDER, "*.csv"))
+    data_files = glob.glob(os.path.join(OUTPUT_FOLDER, "*.jsonl")) + glob.glob(
+        os.path.join(OUTPUT_FOLDER, "*.csv")
+    )
     data_files.sort()
-    
+
     # Upload
     for index, data_file in enumerate(data_files):
         filename = os.path.basename(data_file)
@@ -269,7 +291,7 @@ def upload():
         blob = bucket.blob(destination_blob_name)
         print("Uploading file:", data_file, destination_blob_name)
         blob.upload_from_filename(data_file, timeout=timeout)
-    
+
 
 def main(args=None):
     print("CLI Arguments:", args)
@@ -279,7 +301,7 @@ def main(args=None):
 
     if args.prepare:
         prepare()
-      
+
     if args.upload:
         upload()
 
