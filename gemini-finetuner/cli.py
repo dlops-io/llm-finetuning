@@ -116,7 +116,7 @@ def chat():
     # Get the model endpoint from Vertex AI: https://console.cloud.google.com/vertex-ai/studio/tuning?project=ac215-project
     # MODEL_ENDPOINT = "projects/129349313346/locations/us-central1/endpoints/810191635601162240"
     # MODEL_ENDPOINT = "projects/129349313346/locations/us-central1/endpoints/5584851665544019968"
-    MODEL_ENDPOINT = "projects/129349313346/locations/us-central1/endpoints/3319822527953371136"  # Finetuned model
+    MODEL_ENDPOINT = "projects/129349313346/locations/us-central1/endpoints/5921665062480642048"  # Finetuned model
 
     query = "How is cheese made?"
     print("query: ", query)
