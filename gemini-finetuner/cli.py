@@ -10,7 +10,7 @@ GCP_PROJECT = os.environ["GCP_PROJECT"]
 TRAIN_DATASET = "gs://cheese-dataset/llm-finetune-dataset-small/train.jsonl"  # Replace with your dataset
 VALIDATION_DATASET = "gs://cheese-dataset/llm-finetune-dataset-small/test.jsonl"  # Replace with your dataset
 GCP_LOCATION = "us-central1"
-GENERATIVE_SOURCE_MODEL = "gemini-2.0-flash-001"
+GENERATIVE_SOURCE_MODEL = "gemini-3.1-flash-lite"
 
 #############################################################################
 #                       Initialize the LLM Client                           #
