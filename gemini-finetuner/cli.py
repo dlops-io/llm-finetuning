@@ -9,12 +9,28 @@ from google.genai import types
 GCP_PROJECT = os.environ["GCP_PROJECT"]
 TRAIN_DATASET = "gs://cheese-dataset/llm-finetune-dataset-small/train.jsonl"  # Replace with your dataset
 VALIDATION_DATASET = "gs://cheese-dataset/llm-finetune-dataset-small/test.jsonl"  # Replace with your dataset
-GCP_LOCATION = "us-central1"
+# gemini-3.1-flash-lite: tune in a single region; serve on multi-region "us"
+TUNING_LOCATION = "us-central1"
+SERVING_LOCATION = "us"
 GENERATIVE_SOURCE_MODEL = "gemini-3.1-flash-lite"
 
 #############################################################################
-#                       Initialize the LLM Client                           #
-llm_client = genai.Client(vertexai=True, project=GCP_PROJECT, location=GCP_LOCATION)
+# Train client: single-region (us-central1) — required to create tuning jobs
+train_client = genai.Client(
+    vertexai=True,
+    project=GCP_PROJECT,
+    location=TUNING_LOCATION,
+)
+
+# Chat client: multi-region "us" — required to call tuned Gemini 3.1 endpoints
+chat_client = genai.Client(
+    vertexai=True,
+    project=GCP_PROJECT,
+    location=SERVING_LOCATION,
+    http_options=types.HttpOptions(
+        base_url="https://aiplatform.us.rep.googleapis.com",
+    ),
+)
 #############################################################################
 
 # Configuration settings for content generation
@@ -23,38 +39,6 @@ generation_config = types.GenerateContentConfig(
     temperature=0.75,
     top_p=0.95,
 )
-
-
-def train(wait_for_job=False):
-    print("train()")
-
-    # Supervised Fine Tuning
-    sft_tuning_job = sft.train(
-        source_model=GENERATIVE_SOURCE_MODEL,
-        train_dataset=TRAIN_DATASET,
-        validation_dataset=VALIDATION_DATASET,
-        epochs=1,  # change to 2-3
-        adapter_size=4,
-        learning_rate_multiplier=1.0,
-        tuned_model_display_name="pavlos-cheese-demo-v1",
-    )
-    print("Training job started. Monitoring progress...\n\n")
-
-    # Wait and refresh
-    time.sleep(60)
-    sft_tuning_job.refresh()
-
-    if wait_for_job:
-        print("Check status of tuning job:")
-        print(sft_tuning_job)
-        while not sft_tuning_job.has_ended:
-            time.sleep(60)
-            sft_tuning_job.refresh()
-            print("Job in progress...")
-
-    print(f"Tuned model name: {sft_tuning_job.tuned_model_name}")
-    print(f"Tuned model endpoint name: {sft_tuning_job.tuned_model_endpoint_name}")
-    print(f"Experiment: {sft_tuning_job.experiment}")
 
 
 def train(wait_for_job=False):
@@ -69,12 +53,12 @@ def train(wait_for_job=False):
         epoch_count=1,
         learning_rate_multiplier=1.0,
         adapter_size="ADAPTER_SIZE_FOUR",
-        tuned_model_display_name="pavlos-cheese-demo-v3",
+        tuned_model_display_name="pavlos-cheese-demo-v3.1",
         validation_dataset=validation_dataset,
     )
 
     # Start supervised fine-tuning
-    tuning_job = llm_client.tunings.tune(
+    tuning_job = train_client.tunings.tune(
         base_model=GENERATIVE_SOURCE_MODEL,
         training_dataset=training_dataset,
         config=tuning_config,
@@ -85,7 +69,7 @@ def train(wait_for_job=False):
 
     # Wait and refresh
     time.sleep(60)
-    tuning_job = llm_client.tunings.get(name=tuning_job.name)
+    tuning_job = train_client.tunings.get(name=tuning_job.name)
 
     if wait_for_job:
         print("Check status of tuning job:")
@@ -99,13 +83,17 @@ def train(wait_for_job=False):
 
         while tuning_job.state not in completed_states:
             time.sleep(60)
-            tuning_job = llm_client.tunings.get(name=tuning_job.name)
+            tuning_job = train_client.tunings.get(name=tuning_job.name)
             print(f"Job in progress... State: {tuning_job.state}")
 
     print(f"\nTuned model info: {tuning_job.tuned_model}")
     if tuning_job.tuned_model:
         print(f"Tuned model name: {tuning_job.tuned_model.model}")
         print(f"Tuned model endpoint: {tuning_job.tuned_model.endpoint}")
+        print(
+            "For --chat, paste that endpoint into MODEL_ENDPOINT "
+            "(expect locations/us/... for gemini-3.1-flash-lite)."
+        )
     print(f"Experiment: {tuning_job.experiment}")
 
     return tuning_job
@@ -113,14 +101,16 @@ def train(wait_for_job=False):
 
 def chat():
     print("chat()")
-    # Get the model endpoint from Vertex AI: https://console.cloud.google.com/vertex-ai/studio/tuning?project=ac215-project
-    # MODEL_ENDPOINT = "projects/129349313346/locations/us-central1/endpoints/810191635601162240"
-    # MODEL_ENDPOINT = "projects/129349313346/locations/us-central1/endpoints/5584851665544019968"
-    MODEL_ENDPOINT = "projects/129349313346/locations/us-central1/endpoints/5921665062480642048"  # Finetuned model
+    # Get the model endpoint from Vertex AI Tuning UI after the job succeeds.
+    # For gemini-3.1-flash-lite serving, use locations/us/endpoints/...
+    # https://console.cloud.google.com/vertex-ai/studio/tuning?project=ac215-project
+    MODEL_ENDPOINT = "projects/129349313346/locations/us/endpoints/7655908260297310208"
 
-    query = "How is cheese made?"
+    query = "How is cheese made. Answer pavlos style?"
     print("query: ", query)
-    response = llm_client.models.generate_content(
+    print("Using serving location:", SERVING_LOCATION)
+
+    response = chat_client.models.generate_content(
         model=MODEL_ENDPOINT,
         contents=query,
         config=generation_config,
