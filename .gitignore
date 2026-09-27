@@ -7,3 +7,4 @@ for_local_exp
 *.json
 /dataset-creator/data/*
 /dataset-creator/data/*
+/.idea/
