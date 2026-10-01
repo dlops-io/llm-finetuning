@@ -106,7 +106,7 @@ def chat():
     # https://console.cloud.google.com/vertex-ai/studio/tuning?project=ac215-project
     MODEL_ENDPOINT = "projects/129349313346/locations/us/endpoints/7655908260297310208"
 
-    query = "How is cheese made. Answer pavlos style?"
+    query = "How is cheese made in Greece? Answer pavlos style?"
     print("query: ", query)
     print("Using serving location:", SERVING_LOCATION)
 

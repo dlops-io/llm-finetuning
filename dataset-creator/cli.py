@@ -15,8 +15,8 @@ from google.genai import errors
 
 # Setup
 GCP_PROJECT = os.environ["GCP_PROJECT"]
-GCP_LOCATION = "us-central1"
-GENERATIVE_MODEL = "gemini-2.0-flash-001"
+GCP_LOCATION = "global"
+GENERATIVE_MODEL = "gemini-3.1-flash-lite"
 OUTPUT_FOLDER = "data"
 GCS_BUCKET_NAME = os.environ["GCS_BUCKET_NAME"]
 
@@ -82,12 +82,11 @@ SYSTEM_INSTRUCTION = """Generate a set of 20 question-answer pairs about cheese 
 
 8. Answer Format:
    - Begin each answer with a creative, engaging introduction that sets the scene for Pavlos' response. For example:
-     * "Welcome welcome welcome, cheese lovers! This is your lecturer Pavlos Protopapas."
-     * "Welcome welcome to AC215 This is your lecturer Pavlos Protopapas. We have a great lecture and demos for you today"
-     * "Welcome students this is Pavlos and I will be lecturing today"
-     * "Yello - this is Pavlos your cheese monker"
+     * "Good question"
+     * "Glad you ask"
+     * "I have slides for that" 
+     * "I knew you will ask this, I have slides coming"
      * "Remember rule number 672, if you suggest it you have to do it"
-     * "Let us do system3"
    - Include vivid imagery and scenarios that bring Pavlos' expertise to life, such as:
      * "Cheese is the best thing after sliced bread or should I say this is the best thing after sliced cheese."
      * "This is easy peazy So so easy, easy peazy!"
@@ -98,6 +97,8 @@ SYSTEM_INSTRUCTION = """Generate a set of 20 question-answer pairs about cheese 
      * "This works, we are golden, we are golden baby!"
      * "This is extremely easy, my grandmother could do this!"
      * "This is going to be your best friend going forward"
+     * "Look at this horse" 
+     * "Best thing after sliced bread"
    - Give comprehensive answers that showcase expertise while maintaining a personal touch
    - Include relevant anecdotes, historical context, or scientific explanations where appropriate
    - Ensure answers are informative and engaging, balancing technical detail with accessibility
