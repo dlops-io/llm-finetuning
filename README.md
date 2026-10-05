@@ -41,18 +41,32 @@ In this tutorial go over approaches to fine LLM models. We will cover:
 2. Create a new service account called `llm-service-account`.
 3. In **"Grant this service account access to project"** select:
   - **Storage Admin**
-  - **Vertex AI User**
+  - **Agent Platform User** (formerly **Vertex AI User**; role ID `roles/aiplatform.user`)
+
+  > **Note:** In 2026 Google rebranded Vertex AI as *Gemini Enterprise Agent Platform*, so the **Vertex AI User** role now shows up in the console as **Agent Platform User**. It is the same role (`roles/aiplatform.user`). If you can't find either name, filter the role list by `aiplatform.user`.
 4. This will create a service account.
 5. Click the service account and navigate to the tab **KEYS**.
 6. Click the button **ADD Key (Create New Key)** and select **JSON**. This will download a private key JSON file to your computer.
-7. Copy this JSON file into the **secrets** folder and rename it to `llm-service-account.json`.
+7. Create a folder called `secrets` **next to** the `llm-finetuning` repository (not inside it). Copy this JSON file into it and rename it to exactly `llm-service-account.json`.
 
 Your folder structure should look like this:
 
 ```text
-|-llm-finetuning
-|-secrets
+<any parent folder>/
+├── llm-finetuning/            ← the cloned repository
+│   ├── env.dev
+│   ├── dataset-creator/       ← run `sh docker-shell.sh` from inside these folders
+│   └── gemini-finetuner/
+└── secrets/                   ← create this folder yourself
+    └── llm-service-account.json
 ```
+
+> **Why outside the repo?** Keeping the key out of the repository means it can never be committed to Git by accident. Each `docker-shell.sh` mounts `../../secrets` (relative to the folder you run it from) into the container as `/secrets`, and the code reads the key from `/secrets/llm-service-account.json`. If the `secrets` folder doesn't exist, Docker creates an empty one in that location, so a "file not found" error usually means the JSON file is missing from it or has a different name.
+>
+> **Tips:**
+> - Check the file name: with hidden file extensions it can end up as `llm-service-account.json.json`.
+> - Always `cd` into the container folder (e.g. `dataset-creator`) before running `sh docker-shell.sh`. The paths are relative to where you run it.
+> - To verify the key is mounted, run `ls -la /secrets` inside the container.
 
 ---
 
@@ -244,13 +258,13 @@ python cli.py --train
 
 - Change any of the default parameters if needed
 
-You can view the status of your tuning job on [Vertex AI](https://console.cloud.google.com/vertex-ai/studio/tuning).
+You can view the status of your tuning job on [Agent Platform (formerly Vertex AI)](https://console.cloud.google.com/agent-platform/tuning/managed).
 
 
 
 ### Cost of Fine-tuning
 
-Cost of fine-tuning model on Vertex AI:
+Cost of fine-tuning model on Agent Platform (formerly Vertex AI):
 
 Gemini 1.5 Flash Tuning is 0.008 USD per 1,000 tokens. The below table shows examples of how much it would cost as you have more documents
 
@@ -261,7 +275,7 @@ Gemini 1.5 Flash Tuning is 0.008 USD per 1,000 tokens. The below table shows exa
 
 *** Way too much data for this fine tuning!
 
-Refer to Vertex AI Pricing for various tasks at their [pricing page](https://cloud.google.com/vertex-ai/generative-ai/pricing).
+Refer to Agent Platform Pricing for various tasks at their [pricing page](https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing).
 
 
 
@@ -291,7 +305,7 @@ To test out the Fine-tuned Cheese Model, you can use this [Pavlos Cheese Model](
 > [!NOTE]
 > Use Chrome browser for best performance.
 
-If you go to [Vertex AI Tuning](https://console.cloud.google.com/vertex-ai/studio/tuning) you can view all the detail from training.
+If you go to [Agent Platform Tuning](https://console.cloud.google.com/agent-platform/tuning/managed) you can view all the detail from training.
 
 **Training Monitor:**
 
