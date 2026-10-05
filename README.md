@@ -47,14 +47,26 @@ In this tutorial go over approaches to fine LLM models. We will cover:
 4. This will create a service account.
 5. Click the service account and navigate to the tab **KEYS**.
 6. Click the button **ADD Key (Create New Key)** and select **JSON**. This will download a private key JSON file to your computer.
-7. Copy this JSON file into the **secrets** folder and rename it to `llm-service-account.json`.
+7. Create a folder called `secrets` **next to** the `llm-finetuning` repository (not inside it). Copy this JSON file into it and rename it to exactly `llm-service-account.json`.
 
 Your folder structure should look like this:
 
 ```text
-|-llm-finetuning
-|-secrets
+<any parent folder>/
+├── llm-finetuning/            ← the cloned repository
+│   ├── env.dev
+│   ├── dataset-creator/       ← run `sh docker-shell.sh` from inside these folders
+│   └── gemini-finetuner/
+└── secrets/                   ← create this folder yourself
+    └── llm-service-account.json
 ```
+
+> **Why outside the repo?** Keeping the key out of the repository means it can never be committed to Git by accident. Each `docker-shell.sh` mounts `../../secrets` (relative to the folder you run it from) into the container as `/secrets`, and the code reads the key from `/secrets/llm-service-account.json`. If the `secrets` folder doesn't exist, Docker creates an empty one in that location, so a "file not found" error usually means the JSON file is missing from it or has a different name.
+>
+> **Tips:**
+> - Check the file name: with hidden file extensions it can end up as `llm-service-account.json.json`.
+> - Always `cd` into the container folder (e.g. `dataset-creator`) before running `sh docker-shell.sh`. The paths are relative to where you run it.
+> - To verify the key is mounted, run `ls -la /secrets` inside the container.
 
 ---
 
